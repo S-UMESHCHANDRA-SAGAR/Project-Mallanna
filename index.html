@@ -1,0 +1,55 @@
+<!-- index.html -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Mini Jarvis</title></head>
+<body>
+  <h3>Mini Jarvis</h3>
+  <button id="rec">Start/Stop Recording</button>
+  <div id="transcript"></div>
+  <div id="reply"></div>
+
+<script>
+const recBtn = document.getElementById('rec');
+const transcriptDiv = document.getElementById('transcript');
+const replyDiv = document.getElementById('reply');
+
+let recognizing = false;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const rec = new SpeechRecognition();
+rec.lang = 'en-US';
+rec.interimResults = false;
+
+rec.onresult = (e) => {
+  const text = e.results[0][0].transcript;
+  transcriptDiv.innerText = "You: " + text;
+  fetch('/api/command', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({text})
+  }).then(r=>r.json()).then(async data=>{
+    if(data.type === 'reply') {
+      replyDiv.innerText = "Jarvis: " + data.text;
+      // speak the reply
+      const utter = new SpeechSynthesisUtterance(data.text);
+      window.speechSynthesis.speak(utter);
+    } else if(data.type === 'action'){
+      replyDiv.innerText = 'Action: ' + JSON.stringify(data.result);
+      // handle safe actions (open url in new tab with user permission)
+      if(data.result.action === 'open_url') {
+        if(confirm('Open URL in new tab? ' + data.result.url)) {
+          window.open(data.result.url, '_blank');
+        }
+      }
+    }
+  });
+};
+
+rec.onerror = (e) => console.error(e);
+
+recBtn.onclick = () => {
+  if(recognizing) { rec.stop(); recognizing = false; recBtn.innerText='Start Recording'; }
+  else { rec.start(); recognizing = true; recBtn.innerText='Stop Recording'; }
+};
+</script>
+</body>
+</html>

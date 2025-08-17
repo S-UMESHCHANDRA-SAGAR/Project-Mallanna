@@ -1,0 +1,28 @@
+{
+    "app_paths": {
+        "chrome": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "firefox": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+        "vscode": "C:\\Users\\umesh\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+        "discord": "C:\\Users\\umesh\\AppData\\Local\\Discord\\Update.exe",
+        "spotify": "C:\\Users\\umesh\\AppData\\Roaming\\Spotify\\Spotify.exe",
+        "notepad": "notepad.exe",
+        "calculator": "calc.exe",
+        "paint": "mspaint.exe"
+    },
+    "api_keys": {
+        "openweathermap": "YOUR_WEATHER_API_KEY_HERE",
+        "news_api": "YOUR_NEWS_API_KEY_HERE"
+    },
+    "email": {
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "email": "your_email@gmail.com",
+        "password": "your_app_password"
+    },
+    "settings": {
+        "wake_word": "ellaiya",
+        "voice_timeout": 5,
+        "phrase_time_limit": 7,
+        "auto_volume_adjust": true
+    }
+}
