@@ -620,6 +620,48 @@ def send_email(recipient, subject, body):
     except Exception as e:
         speak("Failed to send email")
 
+def send_whatsapp_message(command):
+    """Parses a command to send a WhatsApp message to a configured contact."""
+    try:
+        command = command.lower()
+        if 'to' in command and 'saying' in command:
+            # Extract recipient name from between "to" and "saying"
+            recipient_name = command.split('to', 1)[1].split('saying', 1)[0].strip()
+            # Extract message from everything after "saying"
+            message_body = command.split('saying', 1)[1].strip()
+
+            if not recipient_name or not message_body:
+                speak("I couldn't understand the recipient or the message. Please use the format: send whatsapp message to [name] saying [message].")
+                return
+
+            contacts = CONFIG.get("whatsapp_contacts", {})
+            recipient_phone = contacts.get(recipient_name.lower())
+
+            if not recipient_phone:
+                speak(f"I'm sorry, I don't have the number for {recipient_name}. Please add it to the whatsapp_contacts section in your config file.")
+                return
+
+            # Schedule the message for 1 minute in the future
+            now = datetime.datetime.now()
+            send_hour = now.hour
+            # pywhatkit can be buggy if the minute is 59, handle the wrap-around
+            if now.minute == 59:
+                send_hour = (now.hour + 1) % 24
+                send_minute = 0
+            else:
+                send_minute = now.minute + 1
+
+            speak(f"Alright, scheduling a WhatsApp message to {recipient_name} that says: {message_body}")
+            pywhatkit.sendwhatmsg(recipient_phone, message_body, send_hour, send_minute, 15, True, 5)
+            speak("Your message has been scheduled and should be sent shortly.")
+
+        else:
+            speak("I didn't catch that. For WhatsApp messages, please say: 'send whatsapp message to [name] saying [message]'.")
+
+    except Exception as e:
+        print(f"❌ Failed to send WhatsApp message: {e}")
+        speak("I'm sorry, I ran into an error trying to send the WhatsApp message. Please check the console for details.")
+
 def set_reminder(minutes, message):
     """Sets a reminder that will speak after specified minutes."""
     def remind():
@@ -1123,6 +1165,7 @@ COMMANDS = {
     ("news", "latest news", "headlines"): get_news,
     
     # Productivity
+    ("send whatsapp message", "whatsapp"): send_whatsapp_message,
     ("search for", "google", "search"): google_search,
     ("smart search",): ai_smart_search,
     ("wikipedia",): search_wikipedia,
