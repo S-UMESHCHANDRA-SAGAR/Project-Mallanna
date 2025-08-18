@@ -432,7 +432,8 @@ def take_screenshot():
         screenshot.save(filename)
         speak(f"Screenshot saved as {filename}")
     except Exception as e:
-        speak("Failed to take screenshot")
+        print(f"❌ Screenshot failed: {e}")
+        speak("Sorry, I failed to take a screenshot. Please check the console for error details.")
 
 def take_picture(frame):
     """Saves a single frame from the camera feed as a picture."""
@@ -445,81 +446,117 @@ def take_picture(frame):
         speak("Sorry, I failed to save the picture.")
 
 def open_camera():
-    """Opens an interactive camera feed."""
+    """
+    Opens an interactive camera feed with non-blocking voice commands.
+    Falls back to the system's default camera app if OpenCV fails.
+    """
     if not CV2_AVAILABLE:
         speak("Camera features require OpenCV. Please install it by running: pip install opencv-python")
         return
 
+    command_state = {"command": None, "running": True}
+
+    def _camera_listener():
+        """Listens for camera commands in a separate thread."""
+        while command_state.get("running", True):
+            command = listen(timeout=2, phrase_time_limit=3)
+            if command:
+                if "take picture" in command or "capture" in command:
+                    command_state["command"] = "take_picture"
+                elif "close camera" in command or "exit" in command:
+                    command_state["command"] = "close"
+            time.sleep(0.1)
+
     speak("Camera is activating. Say 'take picture' to capture, or 'close camera' to exit.")
+
+    # Try to open the camera with default index
     cap = cv2.VideoCapture(0)
+
+    # If default fails, try DSHOW backend on Windows
+    if not cap.isOpened() and sys.platform == "win32":
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
     if not cap.isOpened():
-        speak("I could not access the camera.")
+        speak("I could not access the camera with OpenCV. Trying the system's default camera app instead.")
+        open_camera_alternative()
         return
 
-    while cap.isOpened():
+    listener_thread = threading.Thread(target=_camera_listener)
+    listener_thread.daemon = True
+    listener_thread.start()
+
+    while True:
         ret, frame = cap.read()
         if not ret:
-            speak("I lost the camera feed.")
+            speak("I seem to have lost the camera feed.")
             break
 
         cv2.imshow('Jarvis Camera', frame)
 
-        # Listen for a command in a non-blocking way
-        command = listen(timeout=1, phrase_time_limit=2)
-        if command:
-            if "take picture" in command or "capture" in command:
-                take_picture(frame)
-            elif "close camera" in command or "exit" in command:
-                speak("Closing camera.")
-                break
-        
+        if command_state["command"] == "take_picture":
+            take_picture(frame)
+            command_state["command"] = None  # Reset command after execution
+        elif command_state["command"] == "close":
+            speak("Closing camera.")
+            break
+
         # Allow closing with the 'q' key as a backup
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+    command_state["running"] = False
     cap.release()
     cv2.destroyAllWindows()
+    # Clean up any remaining windows that might be stuck
+    for i in range(5):
+        cv2.waitKey(1)
+
+    listener_thread.join(timeout=2)
 
 
 def open_camera_alternative():
-    """Opens camera using system default camera app."""
+    """Opens the system's default camera app."""
     try:
-        speak("Opening system camera app")
+        speak("Opening system camera app.")
         
         if sys.platform == "win32":
-            # Windows Camera app
             try:
+                # This is the modern command for the Windows 10/11 Camera app.
                 subprocess.run("start microsoft.windows.camera:", shell=True, check=True)
-                speak("Camera app opened successfully")
-            except subprocess.CalledProcessError:
-                # Fallback to older Windows camera
-                try:
-                    os.system("start /B microsoft.windows.camera:")
-                    speak("Camera opened")
-                except:
-                    speak("Unable to open camera. Please open it manually from your start menu")
+                speak("Camera app opened.")
+            except Exception as e:
+                print(f"❌ Failed to open Windows camera app: {e}")
+                speak("I couldn't open the default camera app. You might need to install it from the Microsoft Store or open it manually.")
         
         elif sys.platform == "darwin":  # macOS
-            subprocess.run(["open", "-a", "Photo Booth"], check=True)
-            speak("Photo Booth camera opened")
+            try:
+                # Photo Booth is the most common default camera app on macOS.
+                subprocess.run(["open", "-a", "Photo Booth"], check=True)
+                speak("Photo Booth camera opened.")
+            except Exception as e:
+                print(f"❌ Failed to open Photo Booth: {e}")
+                speak("I couldn't open Photo Booth. Please try opening it manually.")
         
         else:  # Linux
-            try:
-                # Try different camera applications
-                camera_apps = ["cheese", "guvcview", "camorama", "kamoso"]
-                for app in camera_apps:
-                    try:
-                        subprocess.run([app], check=True)
-                        speak(f"Camera opened with {app}")
-                        return
-                    except (subprocess.CalledProcessError, FileNotFoundError):
-                        continue
-                speak("No camera application found. Please install cheese or guvcview")
-            except Exception:
-                speak("Unable to open camera on this system")
+            # Iterate through common camera applications on Linux.
+            camera_apps = ["cheese", "guvcview", "kamoso", "camorama"]
+            opened = False
+            for app in camera_apps:
+                try:
+                    # Use DEVNULL to hide command output from the console.
+                    subprocess.run([app], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    speak(f"Camera opened with {app}.")
+                    opened = True
+                    break
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    continue
+
+            if not opened:
+                speak("I couldn't find a camera application. Please install one, like 'cheese', to use this feature.")
                 
     except Exception as e:
-        speak("Sorry, I couldn't access the camera")
+        print(f"❌ An unexpected error occurred in open_camera_alternative: {e}")
+        speak("Sorry, I encountered an unexpected error trying to access the camera.")
 
 def get_news():
     """Fetches latest news headlines with AI summarization."""
@@ -1133,7 +1170,7 @@ def handle_app_opening(command):
 # 6. ENHANCED LISTENING AND PROCESSING WITH AI
 # -------------------
 
-def listen():
+def listen(timeout=5, phrase_time_limit=10):
     """Enhanced listening with better noise handling."""
     with sr.Microphone() as source:
         print("\n🎤 Listening...")
@@ -1141,7 +1178,7 @@ def listen():
         recognizer.adjust_for_ambient_noise(source, duration=0.5)
         
         try:
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
+            audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
             print("🔄 Processing...")
             command = recognizer.recognize_google(audio)
             print(f"✅ You said: {command}")
