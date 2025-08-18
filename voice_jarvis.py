@@ -636,15 +636,15 @@ def send_vision_whatsapp_message(command):
 
     try:
         command = command.lower()
-        # Command format: "message [contact] on whatsapp saying [message]"
-        if 'on whatsapp saying' in command and 'message' in command:
-            # Extract contact name
-            contact_name = command.split('message', 1)[1].split('on whatsapp saying', 1)[0].strip()
-            # Extract message
-            message_body = command.split('on whatsapp saying', 1)[1].strip()
+        # Command format: "message [message body] to [contact name]"
+        if 'to' in command and 'message' in command:
+            # Extract message body, which is between "message" and "to"
+            message_body = command.split('message', 1)[1].split('to', 1)[0].strip()
+            # Extract contact name, which is everything after "to"
+            contact_name = command.split('to', 1)[1].strip()
 
             if not contact_name or not message_body:
-                speak("I didn't catch the contact or the message. Please use the format: message [contact] on whatsapp saying [message]")
+                speak("I didn't catch that. Please say, 'message [your message] to [contact name]'.")
                 return
 
             # Construct the path to the contact's image
@@ -662,12 +662,11 @@ def send_vision_whatsapp_message(command):
                 contact_location = pyautogui.locateOnScreen(str(image_path), confidence=0.9)
 
                 if contact_location:
-                    speak("Contact found. Opening chat.")
+                    speak(f"Contact {contact_name} found. Opening chat and sending message.")
                     pyautogui.click(pyautogui.center(contact_location))
                     time.sleep(2)  # Wait for the chat to open
 
                     # Type the message and send
-                    speak("Typing your message.")
                     pyautogui.write(message_body, interval=0.05)
                     pyautogui.press('enter')
                     speak("Message sent.")
@@ -680,9 +679,8 @@ def send_vision_whatsapp_message(command):
                      speak("To use this vision feature, you need to install the opencv-python library. Please run: pip install opencv-python")
                  else:
                      raise e
-
         else:
-            speak("I didn't understand the command. Please use the format: message [contact] on whatsapp saying [message]")
+            speak("I didn't understand the command. For sending a message, please say: 'message [your message] to [contact name]'.")
 
     except Exception as e:
         print(f"❌ Failed to send vision-based WhatsApp message: {e}")
@@ -1192,7 +1190,7 @@ COMMANDS = {
     ("news", "latest news", "headlines"): get_news,
     
     # Productivity
-    ("message on whatsapp",): send_vision_whatsapp_message,
+    ("message", "send a message"): send_vision_whatsapp_message,
     ("search for", "google", "search"): google_search,
     ("smart search",): ai_smart_search,
     ("wikipedia",): search_wikipedia,
