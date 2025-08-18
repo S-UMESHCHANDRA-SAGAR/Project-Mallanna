@@ -620,47 +620,73 @@ def send_email(recipient, subject, body):
     except Exception as e:
         speak("Failed to send email")
 
-def send_whatsapp_message(command):
-    """Parses a command to send a WhatsApp message to a configured contact."""
+def open_whatsapp_web():
+    """Opens WhatsApp Web in the default browser."""
+    speak("Opening WhatsApp Web.")
+    webbrowser.open("https://web.whatsapp.com")
+
+def send_vision_whatsapp_message(command):
+    """
+    Sends a WhatsApp message using screen recognition.
+    Requires pre-saved contact images in 'whatsapp_contact_images'.
+    """
+    if not PYAUTOGUI_AVAILABLE:
+        speak("Vision-based messaging requires pyautogui. Please install it: pip install pyautogui")
+        return
+
     try:
         command = command.lower()
-        if 'to' in command and 'saying' in command:
-            # Extract recipient name from between "to" and "saying"
-            recipient_name = command.split('to', 1)[1].split('saying', 1)[0].strip()
-            # Extract message from everything after "saying"
-            message_body = command.split('saying', 1)[1].strip()
+        # Command format: "message [contact] on whatsapp saying [message]"
+        if 'on whatsapp saying' in command and 'message' in command:
+            # Extract contact name
+            contact_name = command.split('message', 1)[1].split('on whatsapp saying', 1)[0].strip()
+            # Extract message
+            message_body = command.split('on whatsapp saying', 1)[1].strip()
 
-            if not recipient_name or not message_body:
-                speak("I couldn't understand the recipient or the message. Please use the format: send whatsapp message to [name] saying [message].")
+            if not contact_name or not message_body:
+                speak("I didn't catch the contact or the message. Please use the format: message [contact] on whatsapp saying [message]")
                 return
 
-            contacts = CONFIG.get("whatsapp_contacts", {})
-            recipient_phone = contacts.get(recipient_name.lower())
+            # Construct the path to the contact's image
+            image_path = Path(f"whatsapp_contact_images/{contact_name}.png")
 
-            if not recipient_phone:
-                speak(f"I'm sorry, I don't have the number for {recipient_name}. Please add it to the whatsapp_contacts section in your config file.")
+            if not image_path.is_file():
+                speak(f"I couldn't find an image for {contact_name}. Please make sure a screenshot named '{contact_name}.png' exists in the 'whatsapp_contact_images' folder.")
                 return
 
-            # Schedule the message for 1 minute in the future
-            now = datetime.datetime.now()
-            send_hour = now.hour
-            # pywhatkit can be buggy if the minute is 59, handle the wrap-around
-            if now.minute == 59:
-                send_hour = (now.hour + 1) % 24
-                send_minute = 0
-            else:
-                send_minute = now.minute + 1
+            # Find the contact on screen
+            speak(f"Searching for {contact_name} on your screen...")
+            try:
+                # Using confidence to allow for minor variations.
+                # This requires opencv-python to be installed: pip install opencv-python
+                contact_location = pyautogui.locateOnScreen(str(image_path), confidence=0.9)
 
-            speak(f"Alright, scheduling a WhatsApp message to {recipient_name} that says: {message_body}")
-            pywhatkit.sendwhatmsg(recipient_phone, message_body, send_hour, send_minute, 15, True, 5)
-            speak("Your message has been scheduled and should be sent shortly.")
+                if contact_location:
+                    speak("Contact found. Opening chat.")
+                    pyautogui.click(pyautogui.center(contact_location))
+                    time.sleep(2)  # Wait for the chat to open
+
+                    # Type the message and send
+                    speak("Typing your message.")
+                    pyautogui.write(message_body, interval=0.05)
+                    pyautogui.press('enter')
+                    speak("Message sent.")
+                else:
+                    speak(f"I couldn't find {contact_name} on the screen. Please make sure the WhatsApp window is visible and the contact is in the chat list.")
+
+            except pyautogui.PyAutoGUIException as e:
+                 # This can happen if the library for image recognition is not installed
+                 if "confidence" in str(e).lower():
+                     speak("To use this vision feature, you need to install the opencv-python library. Please run: pip install opencv-python")
+                 else:
+                     raise e
 
         else:
-            speak("I didn't catch that. For WhatsApp messages, please say: 'send whatsapp message to [name] saying [message]'.")
+            speak("I didn't understand the command. Please use the format: message [contact] on whatsapp saying [message]")
 
     except Exception as e:
-        print(f"❌ Failed to send WhatsApp message: {e}")
-        speak("I'm sorry, I ran into an error trying to send the WhatsApp message. Please check the console for details.")
+        print(f"❌ Failed to send vision-based WhatsApp message: {e}")
+        speak("I ran into an unexpected error. Please check the console for details.")
 
 def set_reminder(minutes, message):
     """Sets a reminder that will speak after specified minutes."""
@@ -1153,6 +1179,7 @@ COMMANDS = {
     ("open camera", "camera"): open_camera,
     
     # Web and search
+    ("open whatsapp",): open_whatsapp_web,
     ("open youtube",): lambda: webbrowser.open("https://www.youtube.com"),
     ("open google",): lambda: webbrowser.open("https://www.google.com"),
     ("open facebook",): lambda: webbrowser.open("https://www.facebook.com"),
@@ -1165,7 +1192,7 @@ COMMANDS = {
     ("news", "latest news", "headlines"): get_news,
     
     # Productivity
-    ("send whatsapp message", "whatsapp"): send_whatsapp_message,
+    ("message on whatsapp",): send_vision_whatsapp_message,
     ("search for", "google", "search"): google_search,
     ("smart search",): ai_smart_search,
     ("wikipedia",): search_wikipedia,
