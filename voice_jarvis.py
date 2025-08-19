@@ -419,6 +419,105 @@ def get_system_status():
     except Exception as e:
         speak("Unable to retrieve system status")
 
+def manage_windows(command):
+    """Manages desktop windows with commands."""
+    if not PYAUTOGUI_AVAILABLE:
+        speak("Window management requires pyautogui. Please install it: pip install pyautogui")
+        return
+
+    command = command.lower()
+
+    try:
+        if "switch" in command or "next window" in command:
+            speak("Switching window.")
+            pyautogui.hotkey('alt', 'tab')
+        elif "close" in command and ("window" in command or "app" in command):
+            speak("Closing the current window.")
+            pyautogui.hotkey('alt', 'f4')
+        elif "maximize" in command and "window" in command:
+            speak("Maximizing window.")
+            # This shortcut works on Windows. For macOS it would be different.
+            if sys.platform == "win32":
+                pyautogui.hotkey('win', 'up')
+            else: # A common macOS shortcut
+                pyautogui.hotkey('ctrl', 'cmd', 'f')
+        elif "minimize" in command and "window" in command:
+            speak("Minimizing window.")
+            if sys.platform == "win32":
+                pyautogui.hotkey('win', 'down')
+            else: # A common macOS shortcut
+                pyautogui.hotkey('cmd', 'm')
+        else:
+            speak("I didn't understand the window command. You can say 'switch window', 'close window', 'maximize window', or 'minimize window'.")
+
+    except Exception as e:
+        print(f"❌ Failed to manage windows: {e}")
+        speak("I encountered an error trying to manage the windows.")
+
+def manage_files(command):
+    """Manages files and folders with voice commands."""
+    command = command.lower()
+
+    try:
+        if "create folder" in command:
+            folder_name = command.replace("create folder", "").strip()
+            if folder_name:
+                os.mkdir(folder_name)
+                speak(f"Folder '{folder_name}' created.")
+            else:
+                speak("Please specify a folder name.")
+
+        elif "delete file" in command:
+            file_name = command.replace("delete file", "").strip()
+            if file_name and os.path.exists(file_name):
+                os.remove(file_name)
+                speak(f"File '{file_name}' deleted.")
+            elif not file_name:
+                speak("Please specify a file to delete.")
+            else:
+                speak(f"File '{file_name}' not found.")
+
+        elif "rename file" in command and "to" in command:
+            parts = command.replace("rename file", "").split(" to ")
+            old_name = parts[0].strip()
+            new_name = parts[1].strip()
+            if old_name and new_name and os.path.exists(old_name):
+                os.rename(old_name, new_name)
+                speak(f"File '{old_name}' renamed to '{new_name}'.")
+            elif not old_name or not new_name:
+                speak("Please specify the old and new file names.")
+            else:
+                speak(f"File '{old_name}' not found.")
+
+        else:
+            speak("I didn't understand the file command. You can say 'create folder', 'delete file', or 'rename file'.")
+
+    except Exception as e:
+        print(f"❌ Failed to manage files: {e}")
+        speak("I encountered an error while managing files.")
+
+def empty_recycle_bin():
+    """Empties the Recycle Bin on Windows."""
+    if not WINSHELL_AVAILABLE:
+        speak("The winshell library is required to manage the recycle bin. Please install it.")
+        return
+
+    if sys.platform == "win32":
+        try:
+            speak("Are you sure you want to permanently empty the recycle bin? This cannot be undone. Please say 'yes' to confirm.")
+            confirmation = listen()
+            if confirmation and "yes" in confirmation:
+                speak("Emptying the recycle bin.")
+                winshell.recycle_bin().empty(confirm=False, show_progress=False, sound=False)
+                speak("The recycle bin has been emptied.")
+            else:
+                speak("Recycle bin cleanup cancelled.")
+        except Exception as e:
+            print(f"❌ Failed to empty recycle bin: {e}")
+            speak("Sorry, I encountered an error while trying to empty the recycle bin.")
+    else:
+        speak("This feature is only available on Windows.")
+
 def take_screenshot():
     """Takes a screenshot and saves it."""
     if not PYAUTOGUI_AVAILABLE:
@@ -1205,6 +1304,9 @@ COMMANDS = {
     ("remind me", "set reminder"): lambda cmd: handle_reminder(cmd),
     
     # System control
+    ("switch window", "next window", "close window", "close app", "maximize window", "minimize window"): manage_windows,
+    ("create folder", "delete file", "rename file"): manage_files,
+    ("empty recycle bin",): empty_recycle_bin,
     ("weather in", "weather"): get_weather,
     ("volume", "set volume", "increase volume", "decrease volume"): adjust_volume,
     ("mute", "unmute"): toggle_mute,
