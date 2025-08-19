@@ -636,51 +636,56 @@ def send_vision_whatsapp_message(command):
 
     try:
         command = command.lower()
-        # Command format: "message [message body] to [contact name]"
-        if 'to' in command and 'message' in command:
-            # Extract message body, which is between "message" and "to"
-            message_body = command.split('message', 1)[1].split('to', 1)[0].strip()
-            # Extract contact name, which is everything after "to"
-            contact_name = command.split('to', 1)[1].strip()
+        message_body = ""
+        contact_name = ""
 
-            if not contact_name or not message_body:
-                speak("I didn't catch that. Please say, 'message [your message] to [contact name]'.")
-                return
-
-            # Construct the path to the contact's image
-            image_path = Path(f"whatsapp_contact_images/{contact_name}.png")
-
-            if not image_path.is_file():
-                speak(f"I couldn't find an image for {contact_name}. Please make sure a screenshot named '{contact_name}.png' exists in the 'whatsapp_contact_images' folder.")
-                return
-
-            # Find the contact on screen
-            speak(f"Searching for {contact_name} on your screen...")
-            try:
-                # Using confidence to allow for minor variations.
-                # This requires opencv-python to be installed: pip install opencv-python
-                contact_location = pyautogui.locateOnScreen(str(image_path), confidence=0.9)
-
-                if contact_location:
-                    speak(f"Contact {contact_name} found. Opening chat and sending message.")
-                    pyautogui.click(pyautogui.center(contact_location))
-                    time.sleep(2)  # Wait for the chat to open
-
-                    # Type the message and send
-                    pyautogui.write(message_body, interval=0.05)
-                    pyautogui.press('enter')
-                    speak("Message sent.")
-                else:
-                    speak(f"I couldn't find {contact_name} on the screen. Please make sure the WhatsApp window is visible and the contact is in the chat list.")
-
-            except pyautogui.PyAutoGUIException as e:
-                 # This can happen if the library for image recognition is not installed
-                 if "confidence" in str(e).lower():
-                     speak("To use this vision feature, you need to install the opencv-python library. Please run: pip install opencv-python")
-                 else:
-                     raise e
+        # Handles "message [message] to [contact]"
+        if command.startswith("message") and 'to' in command:
+            parts = command.split('to', 1)
+            message_body = parts[0].replace("message", "").strip()
+            contact_name = parts[1].strip()
+        # Handles "send [message] to [contact]"
+        elif command.startswith("send") and 'to' in command:
+            parts = command.split('to', 1)
+            message_body = parts[0].replace("send", "").strip()
+            contact_name = parts[1].strip()
         else:
-            speak("I didn't understand the command. For sending a message, please say: 'message [your message] to [contact name]'.")
+            speak("I didn't understand that. Please say 'send [message] to [contact]' or 'message [message] to [contact]'.")
+            return
+
+        if not contact_name or not message_body:
+            speak("I couldn't figure out the message or the contact. Please try again with the correct format.")
+            return
+
+        # Construct the path to the contact's image
+        image_path = Path(f"whatsapp_contact_images/{contact_name}.png")
+
+        if not image_path.is_file():
+            speak(f"I couldn't find an image for {contact_name}. Please make sure a screenshot named '{contact_name}.png' exists in the 'whatsapp_contact_images' folder.")
+            return
+
+        # Find the contact on screen
+        speak(f"Searching for {contact_name} on your screen...")
+        try:
+            contact_location = pyautogui.locateOnScreen(str(image_path), confidence=0.9)
+
+            if contact_location:
+                speak(f"Contact {contact_name} found. Opening chat and sending your message.")
+                pyautogui.click(pyautogui.center(contact_location))
+                time.sleep(2)  # Wait for the chat to open
+
+                # Type the message and send
+                pyautogui.write(message_body, interval=0.05)
+                pyautogui.press('enter')
+                speak("Message sent.")
+            else:
+                speak(f"I couldn't find {contact_name} on the screen. Please make sure the WhatsApp window is visible and the contact is in the chat list.")
+
+        except pyautogui.PyAutoGUIException as e:
+             if "confidence" in str(e).lower():
+                 speak("To use this vision feature, you need to install the opencv-python library. Please run: pip install opencv-python")
+             else:
+                 raise e
 
     except Exception as e:
         print(f"❌ Failed to send vision-based WhatsApp message: {e}")
@@ -1190,7 +1195,7 @@ COMMANDS = {
     ("news", "latest news", "headlines"): get_news,
     
     # Productivity
-    ("message", "send a message"): send_vision_whatsapp_message,
+    ("send", "message"): send_vision_whatsapp_message,
     ("search for", "google", "search"): google_search,
     ("smart search",): ai_smart_search,
     ("wikipedia",): search_wikipedia,
