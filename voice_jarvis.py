@@ -420,35 +420,35 @@ def get_system_status():
         speak("Unable to retrieve system status")
 
 def manage_windows(command):
-    """Manages desktop windows with commands."""
+    """Manages desktop windows based on keywords."""
     if not PYAUTOGUI_AVAILABLE:
-        speak("Window management requires pyautogui. Please install it: pip install pyautogui")
+        speak("Window management requires pyautogui. Please install it.")
         return
 
     command = command.lower()
 
     try:
-        if "switch" in command or "next window" in command:
+        if "switch" in command or "next" in command:
             speak("Switching window.")
             pyautogui.hotkey('alt', 'tab')
-        elif "close" in command and ("window" in command or "app" in command):
+        elif "close" in command:
             speak("Closing the current window.")
             pyautogui.hotkey('alt', 'f4')
-        elif "maximize" in command and "window" in command:
+        elif "maximize" in command:
             speak("Maximizing window.")
-            # This shortcut works on Windows. For macOS it would be different.
             if sys.platform == "win32":
                 pyautogui.hotkey('win', 'up')
-            else: # A common macOS shortcut
+            else:
                 pyautogui.hotkey('ctrl', 'cmd', 'f')
-        elif "minimize" in command and "window" in command:
+        elif "minimize" in command:
             speak("Minimizing window.")
             if sys.platform == "win32":
                 pyautogui.hotkey('win', 'down')
-            else: # A common macOS shortcut
+            else:
                 pyautogui.hotkey('cmd', 'm')
         else:
-            speak("I didn't understand the window command. You can say 'switch window', 'close window', 'maximize window', or 'minimize window'.")
+            # This case should ideally not be reached if triggers are set up correctly
+            speak("I didn't understand the window command.")
 
     except Exception as e:
         print(f"❌ Failed to manage windows: {e}")
@@ -1304,7 +1304,7 @@ COMMANDS = {
     ("remind me", "set reminder"): lambda cmd: handle_reminder(cmd),
     
     # System control
-    ("switch window", "next window", "close window", "close app", "maximize window", "minimize window"): manage_windows,
+    ("switch", "next window", "close", "maximize", "minimize"): manage_windows,
     ("create folder", "delete file", "rename file"): manage_files,
     ("empty recycle bin",): empty_recycle_bin,
     ("weather in", "weather"): get_weather,
