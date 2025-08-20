@@ -419,105 +419,6 @@ def get_system_status():
     except Exception as e:
         speak("Unable to retrieve system status")
 
-def manage_windows(command):
-    """Manages desktop windows based on keywords."""
-    if not PYAUTOGUI_AVAILABLE:
-        speak("Window management requires pyautogui. Please install it.")
-        return
-
-    command = command.lower()
-
-    try:
-        if "switch" in command or "next" in command:
-            speak("Switching window.")
-            pyautogui.hotkey('alt', 'tab')
-        elif "close" in command:
-            speak("Closing the current window.")
-            pyautogui.hotkey('alt', 'f4')
-        elif "maximize" in command:
-            speak("Maximizing window.")
-            if sys.platform == "win32":
-                pyautogui.hotkey('win', 'up')
-            else:
-                pyautogui.hotkey('ctrl', 'cmd', 'f')
-        elif "minimize" in command:
-            speak("Minimizing window.")
-            if sys.platform == "win32":
-                pyautogui.hotkey('win', 'down')
-            else:
-                pyautogui.hotkey('cmd', 'm')
-        else:
-            # This case should ideally not be reached if triggers are set up correctly
-            speak("I didn't understand the window command.")
-
-    except Exception as e:
-        print(f"❌ Failed to manage windows: {e}")
-        speak("I encountered an error trying to manage the windows.")
-
-def manage_files(command):
-    """Manages files and folders with voice commands."""
-    command = command.lower()
-
-    try:
-        if "create folder" in command:
-            folder_name = command.replace("create folder", "").strip()
-            if folder_name:
-                os.mkdir(folder_name)
-                speak(f"Folder '{folder_name}' created.")
-            else:
-                speak("Please specify a folder name.")
-
-        elif "delete file" in command:
-            file_name = command.replace("delete file", "").strip()
-            if file_name and os.path.exists(file_name):
-                os.remove(file_name)
-                speak(f"File '{file_name}' deleted.")
-            elif not file_name:
-                speak("Please specify a file to delete.")
-            else:
-                speak(f"File '{file_name}' not found.")
-
-        elif "rename file" in command and "to" in command:
-            parts = command.replace("rename file", "").split(" to ")
-            old_name = parts[0].strip()
-            new_name = parts[1].strip()
-            if old_name and new_name and os.path.exists(old_name):
-                os.rename(old_name, new_name)
-                speak(f"File '{old_name}' renamed to '{new_name}'.")
-            elif not old_name or not new_name:
-                speak("Please specify the old and new file names.")
-            else:
-                speak(f"File '{old_name}' not found.")
-
-        else:
-            speak("I didn't understand the file command. You can say 'create folder', 'delete file', or 'rename file'.")
-
-    except Exception as e:
-        print(f"❌ Failed to manage files: {e}")
-        speak("I encountered an error while managing files.")
-
-def empty_recycle_bin():
-    """Empties the Recycle Bin on Windows."""
-    if not WINSHELL_AVAILABLE:
-        speak("The winshell library is required to manage the recycle bin. Please install it.")
-        return
-
-    if sys.platform == "win32":
-        try:
-            speak("Are you sure you want to permanently empty the recycle bin? This cannot be undone. Please say 'yes' to confirm.")
-            confirmation = listen()
-            if confirmation and "yes" in confirmation:
-                speak("Emptying the recycle bin.")
-                winshell.recycle_bin().empty(confirm=False, show_progress=False, sound=False)
-                speak("The recycle bin has been emptied.")
-            else:
-                speak("Recycle bin cleanup cancelled.")
-        except Exception as e:
-            print(f"❌ Failed to empty recycle bin: {e}")
-            speak("Sorry, I encountered an error while trying to empty the recycle bin.")
-    else:
-        speak("This feature is only available on Windows.")
-
 def take_screenshot():
     """Takes a screenshot and saves it."""
     if not PYAUTOGUI_AVAILABLE:
@@ -531,8 +432,7 @@ def take_screenshot():
         screenshot.save(filename)
         speak(f"Screenshot saved as {filename}")
     except Exception as e:
-        print(f"❌ Screenshot failed: {e}")
-        speak("Sorry, I failed to take a screenshot. Please check the console for error details.")
+        speak("Failed to take screenshot")
 
 def take_picture(frame):
     """Saves a single frame from the camera feed as a picture."""
@@ -545,117 +445,81 @@ def take_picture(frame):
         speak("Sorry, I failed to save the picture.")
 
 def open_camera():
-    """
-    Opens an interactive camera feed with non-blocking voice commands.
-    Falls back to the system's default camera app if OpenCV fails.
-    """
+    """Opens an interactive camera feed."""
     if not CV2_AVAILABLE:
         speak("Camera features require OpenCV. Please install it by running: pip install opencv-python")
         return
 
-    command_state = {"command": None, "running": True}
-
-    def _camera_listener():
-        """Listens for camera commands in a separate thread."""
-        while command_state.get("running", True):
-            command = listen(timeout=2, phrase_time_limit=3)
-            if command:
-                if "take picture" in command or "capture" in command:
-                    command_state["command"] = "take_picture"
-                elif "close camera" in command or "exit" in command:
-                    command_state["command"] = "close"
-            time.sleep(0.1)
-
     speak("Camera is activating. Say 'take picture' to capture, or 'close camera' to exit.")
-
-    # Try to open the camera with default index
     cap = cv2.VideoCapture(0)
-
-    # If default fails, try DSHOW backend on Windows
-    if not cap.isOpened() and sys.platform == "win32":
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-
     if not cap.isOpened():
-        speak("I could not access the camera with OpenCV. Trying the system's default camera app instead.")
-        open_camera_alternative()
+        speak("I could not access the camera.")
         return
 
-    listener_thread = threading.Thread(target=_camera_listener)
-    listener_thread.daemon = True
-    listener_thread.start()
-
-    while True:
+    while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
-            speak("I seem to have lost the camera feed.")
+            speak("I lost the camera feed.")
             break
 
         cv2.imshow('Jarvis Camera', frame)
 
-        if command_state["command"] == "take_picture":
-            take_picture(frame)
-            command_state["command"] = None  # Reset command after execution
-        elif command_state["command"] == "close":
-            speak("Closing camera.")
-            break
+        # Listen for a command in a non-blocking way
+        command = listen(timeout=1, phrase_time_limit=2)
+        if command:
+            if "take picture" in command or "capture" in command:
+                take_picture(frame)
+            elif "close camera" in command or "exit" in command:
+                speak("Closing camera.")
+                break
 
         # Allow closing with the 'q' key as a backup
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    command_state["running"] = False
     cap.release()
     cv2.destroyAllWindows()
-    # Clean up any remaining windows that might be stuck
-    for i in range(5):
-        cv2.waitKey(1)
-
-    listener_thread.join(timeout=2)
 
 
 def open_camera_alternative():
-    """Opens the system's default camera app."""
+    """Opens camera using system default camera app."""
     try:
-        speak("Opening system camera app.")
+        speak("Opening system camera app")
         
         if sys.platform == "win32":
+            # Windows Camera app
             try:
-                # This is the modern command for the Windows 10/11 Camera app.
                 subprocess.run("start microsoft.windows.camera:", shell=True, check=True)
-                speak("Camera app opened.")
-            except Exception as e:
-                print(f"❌ Failed to open Windows camera app: {e}")
-                speak("I couldn't open the default camera app. You might need to install it from the Microsoft Store or open it manually.")
+                speak("Camera app opened successfully")
+            except subprocess.CalledProcessError:
+                # Fallback to older Windows camera
+                try:
+                    os.system("start /B microsoft.windows.camera:")
+                    speak("Camera opened")
+                except:
+                    speak("Unable to open camera. Please open it manually from your start menu")
         
         elif sys.platform == "darwin":  # macOS
-            try:
-                # Photo Booth is the most common default camera app on macOS.
-                subprocess.run(["open", "-a", "Photo Booth"], check=True)
-                speak("Photo Booth camera opened.")
-            except Exception as e:
-                print(f"❌ Failed to open Photo Booth: {e}")
-                speak("I couldn't open Photo Booth. Please try opening it manually.")
+            subprocess.run(["open", "-a", "Photo Booth"], check=True)
+            speak("Photo Booth camera opened")
         
         else:  # Linux
-            # Iterate through common camera applications on Linux.
-            camera_apps = ["cheese", "guvcview", "kamoso", "camorama"]
-            opened = False
-            for app in camera_apps:
-                try:
-                    # Use DEVNULL to hide command output from the console.
-                    subprocess.run([app], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    speak(f"Camera opened with {app}.")
-                    opened = True
-                    break
-                except (subprocess.CalledProcessError, FileNotFoundError):
-                    continue
-
-            if not opened:
-                speak("I couldn't find a camera application. Please install one, like 'cheese', to use this feature.")
+            try:
+                # Try different camera applications
+                camera_apps = ["cheese", "guvcview", "camorama", "kamoso"]
+                for app in camera_apps:
+                    try:
+                        subprocess.run([app], check=True)
+                        speak(f"Camera opened with {app}")
+                        return
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+                speak("No camera application found. Please install cheese or guvcview")
+            except Exception:
+                speak("Unable to open camera on this system")
                 
     except Exception as e:
-        print(f"❌ An unexpected error occurred in open_camera_alternative: {e}")
-        speak("Sorry, I encountered an unexpected error trying to access the camera.")
+        speak("Sorry, I couldn't access the camera")
 
 def get_news():
     """Fetches latest news headlines with AI summarization."""
@@ -718,77 +582,6 @@ def send_email(recipient, subject, body):
         speak(f"Email sent to {recipient}")
     except Exception as e:
         speak("Failed to send email")
-
-def open_whatsapp_web():
-    """Opens WhatsApp Web in the default browser."""
-    speak("Opening WhatsApp Web.")
-    webbrowser.open("https://web.whatsapp.com")
-
-def send_vision_whatsapp_message(command):
-    """
-    Sends a WhatsApp message using screen recognition.
-    Requires pre-saved contact images in 'whatsapp_contact_images'.
-    """
-    if not PYAUTOGUI_AVAILABLE:
-        speak("Vision-based messaging requires pyautogui. Please install it: pip install pyautogui")
-        return
-
-    try:
-        command = command.lower()
-        message_body = ""
-        contact_name = ""
-
-        # Handles "message [message] to [contact]"
-        if command.startswith("message") and 'to' in command:
-            parts = command.split('to', 1)
-            message_body = parts[0].replace("message", "").strip()
-            contact_name = parts[1].strip()
-        # Handles "send [message] to [contact]"
-        elif command.startswith("send") and 'to' in command:
-            parts = command.split('to', 1)
-            message_body = parts[0].replace("send", "").strip()
-            contact_name = parts[1].strip()
-        else:
-            speak("I didn't understand that. Please say 'send [message] to [contact]' or 'message [message] to [contact]'.")
-            return
-
-        if not contact_name or not message_body:
-            speak("I couldn't figure out the message or the contact. Please try again with the correct format.")
-            return
-
-        # Construct the path to the contact's image
-        image_path = Path(f"whatsapp_contact_images/{contact_name}.png")
-
-        if not image_path.is_file():
-            speak(f"I couldn't find an image for {contact_name}. Please make sure a screenshot named '{contact_name}.png' exists in the 'whatsapp_contact_images' folder.")
-            return
-
-        # Find the contact on screen
-        speak(f"Searching for {contact_name} on your screen...")
-        try:
-            contact_location = pyautogui.locateOnScreen(str(image_path), confidence=0.9)
-
-            if contact_location:
-                speak(f"Contact {contact_name} found. Opening chat and sending your message.")
-                pyautogui.click(pyautogui.center(contact_location))
-                time.sleep(2)  # Wait for the chat to open
-
-                # Type the message and send
-                pyautogui.write(message_body, interval=0.05)
-                pyautogui.press('enter')
-                speak("Message sent.")
-            else:
-                speak(f"I couldn't find {contact_name} on the screen. Please make sure the WhatsApp window is visible and the contact is in the chat list.")
-
-        except pyautogui.PyAutoGUIException as e:
-             if "confidence" in str(e).lower():
-                 speak("To use this vision feature, you need to install the opencv-python library. Please run: pip install opencv-python")
-             else:
-                 raise e
-
-    except Exception as e:
-        print(f"❌ Failed to send vision-based WhatsApp message: {e}")
-        speak("I ran into an unexpected error. Please check the console for details.")
 
 def set_reminder(minutes, message):
     """Sets a reminder that will speak after specified minutes."""
@@ -1281,7 +1074,6 @@ COMMANDS = {
     ("open camera", "camera"): open_camera,
     
     # Web and search
-    ("open whatsapp",): open_whatsapp_web,
     ("open youtube",): lambda: webbrowser.open("https://www.youtube.com"),
     ("open google",): lambda: webbrowser.open("https://www.google.com"),
     ("open facebook",): lambda: webbrowser.open("https://www.facebook.com"),
@@ -1294,7 +1086,6 @@ COMMANDS = {
     ("news", "latest news", "headlines"): get_news,
     
     # Productivity
-    ("send", "message"): send_vision_whatsapp_message,
     ("search for", "google", "search"): google_search,
     ("smart search",): ai_smart_search,
     ("wikipedia",): search_wikipedia,
@@ -1304,9 +1095,6 @@ COMMANDS = {
     ("remind me", "set reminder"): lambda cmd: handle_reminder(cmd),
     
     # System control
-    ("switch", "next window", "close", "maximize", "minimize"): manage_windows,
-    ("create folder", "delete file", "rename file"): manage_files,
-    ("empty recycle bin",): empty_recycle_bin,
     ("weather in", "weather"): get_weather,
     ("volume", "set volume", "increase volume", "decrease volume"): adjust_volume,
     ("mute", "unmute"): toggle_mute,
@@ -1345,7 +1133,7 @@ def handle_app_opening(command):
 # 6. ENHANCED LISTENING AND PROCESSING WITH AI
 # -------------------
 
-def listen(timeout=5, phrase_time_limit=10):
+def listen():
     """Enhanced listening with better noise handling."""
     with sr.Microphone() as source:
         print("\n🎤 Listening...")
@@ -1353,7 +1141,7 @@ def listen(timeout=5, phrase_time_limit=10):
         recognizer.adjust_for_ambient_noise(source, duration=0.5)
         
         try:
-            audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
             print("🔄 Processing...")
             command = recognizer.recognize_google(audio)
             print(f"✅ You said: {command}")
