@@ -1149,7 +1149,6 @@ COMMANDS = {
     ("smart search",): ai_smart_search,
     ("wikipedia",): search_wikipedia,
     ("calculate", "math", "compute"): calculate,
-    ("create folder", "creator folder", "make folder"): create_folder,
     ("create file",): create_file,
     ("list files", "show files"): list_files,
     ("remind me", "set reminder"): lambda cmd: handle_reminder(cmd),
@@ -1254,6 +1253,10 @@ def process_command(command):
             expression = expression.replace(word, "")
         expression = expression.strip()
         calculate(expression)
+        return True
+
+    if any(phrase in command for phrase in ["create folder", "make folder", "create a folder"]):
+        create_folder(command)
         return True
 
     # AI fallback for unknown commands
