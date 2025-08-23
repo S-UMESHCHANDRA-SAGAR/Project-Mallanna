@@ -1135,8 +1135,11 @@ def switch_to_window(command):
         windows = gw.getWindowsWithTitle(app_name)
 
         if windows:
-            # Activate the first matching window
+            # Activate the first matching window using a more robust sequence
             target_window = windows[0]
+            if target_window.isMinimized:
+                target_window.restore()
+            time.sleep(0.05) # Add a small delay
             target_window.activate()
             speak(f"Switched to {app_name}")
         else:
