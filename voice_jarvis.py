@@ -1223,6 +1223,12 @@ def process_command(command):
     if not command:
         return False
 
+    # --- FIX: Prioritize specific, multi-word commands before generic ones ---
+    # Check for specific phrases first to avoid being caught by generic triggers like "create".
+    if any(phrase in command for phrase in ["create folder", "make folder", "create a folder"]):
+        create_folder(command)
+        return True
+
     # Find exact matches first
     for triggers, function in COMMANDS.items():
         for trigger in triggers:
@@ -1253,10 +1259,6 @@ def process_command(command):
             expression = expression.replace(word, "")
         expression = expression.strip()
         calculate(expression)
-        return True
-
-    if any(phrase in command for phrase in ["create folder", "make folder", "create a folder"]):
-        create_folder(command)
         return True
 
     # AI fallback for unknown commands
