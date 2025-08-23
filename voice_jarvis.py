@@ -472,7 +472,7 @@ def open_camera():
             elif "close camera" in command or "exit" in command:
                 speak("Closing camera.")
                 break
-        
+
         # Allow closing with the 'q' key as a backup
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -647,14 +647,73 @@ def calculate(expression):
         else:
             speak("I couldn't calculate that")
 
-def create_file(filename, content=""):
-    """Creates a new file with optional content."""
+def create_folder(command):
+    """Creates a new folder based on a voice command."""
     try:
+        # Clean up the command to extract the core request
+        command = command.lower()
+        phrases_to_remove = ["creator folder called", "create a folder named", "create a folder called", "create folder", "make a folder named", "make a folder called", "make folder"]
+        for phrase in phrases_to_remove:
+            if phrase in command:
+                command = command.replace(phrase, "").strip()
+
+        # Logic to separate folder name from path
+        # e.g., "my_folder in D drive" or "my_folder"
+        parts = command.split(" in ")
+        folder_name = parts[0].strip()
+        path = "."  # Default to current directory
+
+        if len(parts) > 1:
+            path_str = parts[1].strip()
+            # Handles "D drive", "the D drive"
+            if "drive" in path_str:
+                # Find the drive letter, which should be the first letter
+                for char in path_str:
+                    if char.isalpha():
+                        drive_letter = char.upper()
+                        path = f"{drive_letter}:\\"
+                        break
+            else:
+                path = path_str
+
+        # Construct the full path and create the directory
+        full_path = os.path.join(path, folder_name)
+
+        if not folder_name:
+             speak("Please specify a folder name.")
+             return
+
+        if not os.path.exists(full_path):
+            os.makedirs(full_path)
+            speak(f"Folder '{folder_name}' created successfully at '{os.path.abspath(full_path)}'")
+        else:
+            speak(f"Folder '{folder_name}' already exists at '{os.path.abspath(full_path)}'")
+
+    except Exception as e:
+        print(f"Error creating folder: {e}")
+        speak("Sorry, I couldn't create the folder. Please check the name and path provided.")
+
+
+def create_file(command):
+    """Creates a new file with optional content from a command."""
+    try:
+        # "create file test.txt"
+        # "create file report.txt with content Hello World"
+        command = command.replace("create file", "").strip()
+        parts = command.split(" with content ")
+        filename = parts[0].strip()
+        content = parts[1].strip() if len(parts) > 1 else ""
+
+        if not filename:
+            speak("Please specify a filename.")
+            return
+
         with open(filename, 'w') as f:
             f.write(content)
-        speak(f"File {filename} created successfully")
+        speak(f"File '{filename}' created successfully.")
     except Exception as e:
-        speak(f"Failed to create file {filename}")
+        print(f"Error creating file: {e}")
+        speak(f"Failed to create file '{filename}'.")
 
 def list_files(directory="."):
     """Lists files in a directory."""
@@ -1090,6 +1149,7 @@ COMMANDS = {
     ("smart search",): ai_smart_search,
     ("wikipedia",): search_wikipedia,
     ("calculate", "math", "compute"): calculate,
+    ("create folder", "creator folder", "make folder"): create_folder,
     ("create file",): create_file,
     ("list files", "show files"): list_files,
     ("remind me", "set reminder"): lambda cmd: handle_reminder(cmd),
