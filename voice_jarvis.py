@@ -39,6 +39,12 @@ except ImportError:
     PYAUTOGUI_AVAILABLE = False
 
 try:
+    import pygetwindow as gw
+    PYGETWINDOW_AVAILABLE = True
+except ImportError:
+    PYGETWINDOW_AVAILABLE = False
+
+try:
     import cv2
     import numpy as np
     CV2_AVAILABLE = True
@@ -1109,6 +1115,85 @@ def uninstall_application(command):
     else:
         speak("Uninstallation cancelled.")
 
+def switch_to_window(command):
+    """Switches focus to a window specified in the command."""
+    if not PYGETWINDOW_AVAILABLE:
+        speak("Window management is not available. Please install the pygetwindow library by running: pip install pygetwindow")
+        return
+
+    try:
+        # e.g., "switch to chrome" -> "chrome"
+        app_name = command.replace("switch to", "").strip()
+
+        if not app_name:
+            speak("Which application would you like to switch to?")
+            app_name = listen()
+            if not app_name:
+                return
+
+        # Find windows that match the name
+        windows = gw.getWindowsWithTitle(app_name)
+
+        if windows:
+            # Activate the first matching window
+            target_window = windows[0]
+            target_window.activate()
+            speak(f"Switched to {app_name}")
+        else:
+            speak(f"Sorry, I couldn't find a window for {app_name}.")
+
+    except Exception as e:
+        print(f"Error switching window: {e}")
+        speak("I encountered an error while trying to switch windows.")
+
+def close_active_window():
+    """Closes the currently active window after confirmation."""
+    if not PYGETWINDOW_AVAILABLE:
+        speak("Window management is not available. Please install pygetwindow.")
+        return
+
+    try:
+        active_window = gw.getActiveWindow()
+        if active_window:
+            # --- FIX: Avoid closing critical system windows ---
+            if active_window.title in ["Windows Shell Experience Host", "Program Manager"]:
+                speak("I cannot close this window as it is a critical part of the system.")
+                return
+
+            speak(f"Are you sure you want to close the window titled '{active_window.title}'? Please say 'yes' to confirm.")
+            confirmation = listen()
+            if confirmation and "yes" in confirmation:
+                active_window.close()
+                speak("Window closed.")
+            else:
+                speak("Close window command cancelled.")
+        else:
+            speak("I couldn't find an active window to close.")
+    except Exception as e:
+        print(f"Error closing window: {e}")
+        speak("I encountered an error while trying to close the window.")
+
+def minimize_all_windows():
+    """Minimizes all windows to show the desktop."""
+    if not PYAUTOGUI_AVAILABLE:
+        speak("Desktop management is not available. Please install pyautogui.")
+        return
+
+    try:
+        # Use platform-specific hotkeys to show the desktop
+        if sys.platform == "win32":
+            pyautogui.hotkey('win', 'd')
+        elif sys.platform == "darwin":  # macOS
+            pyautogui.hotkey('command', 'option', 'h', 'm') # Hides others, not quite the same but close
+        else:  # Linux (works on many distros like Ubuntu)
+            pyautogui.hotkey('ctrl', 'super', 'd')
+
+        speak("Showing the desktop.")
+
+    except Exception as e:
+        print(f"Error minimizing windows: {e}")
+        speak("I encountered an error while trying to minimize windows.")
+
 # -------------------
 # 5. AI-ENHANCED COMMAND MAPPING
 # -------------------
@@ -1131,6 +1216,9 @@ COMMANDS = {
     ("system status", "performance", "cpu usage"): get_system_status,
     ("take screenshot", "screenshot"): take_screenshot,
     ("open camera", "camera"): open_camera,
+    ("switch to",): switch_to_window,
+    ("close window", "close active window", "close this window"): close_active_window,
+    ("minimize all windows", "show desktop"): minimize_all_windows,
     
     # Web and search
     ("open youtube",): lambda: webbrowser.open("https://www.youtube.com"),
