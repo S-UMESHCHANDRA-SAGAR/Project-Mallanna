@@ -1219,9 +1219,6 @@ COMMANDS = {
     ("system status", "performance", "cpu usage"): get_system_status,
     ("take screenshot", "screenshot"): take_screenshot,
     ("open camera", "camera"): open_camera,
-    ("switch to",): switch_to_window,
-    ("close window", "close active window", "close this window"): close_active_window,
-    ("minimize all windows", "show desktop"): minimize_all_windows,
     
     # Web and search
     ("open youtube",): lambda: webbrowser.open("https://www.youtube.com"),
@@ -1318,6 +1315,17 @@ def process_command(command):
     # Check for specific phrases first to avoid being caught by generic triggers like "create".
     if any(phrase in command for phrase in ["create folder", "make folder", "create a folder"]):
         create_folder(command)
+        return True
+
+    # Check for window management commands with flexible matching
+    if any(phrase in command for phrase in ["close window", "close the window", "close active window"]):
+        close_active_window()
+        return True
+    if "switch to" in command:
+        switch_to_window(command)
+        return True
+    if any(phrase in command for phrase in ["minimize all", "show desktop"]):
+        minimize_all_windows()
         return True
 
     # Find exact matches first
