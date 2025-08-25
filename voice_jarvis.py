@@ -15,6 +15,7 @@ import time
 import random
 import datetime
 import threading
+import difflib
 from pathlib import Path
 
 # --- Feature-Specific Libraries ---
@@ -1201,18 +1202,12 @@ def recall_fact(command):
         config_data = load_config()
         user_memory = config_data.get("user_memory", {})
 
-        # Find the best match in memory (more flexible)
-        best_match = None
-        highest_ratio = 0.7  # Require a minimum match ratio
+        # Find the best match in memory using difflib for fuzzy matching
+        stored_keys = list(user_memory.keys())
+        matches = difflib.get_close_matches(key, stored_keys, n=1, cutoff=0.6)
 
-        # A simple fuzzy matching
-        for stored_key in user_memory.keys():
-            # This is a very basic way to check for similarity
-            if key in stored_key or stored_key in key:
-                 best_match = stored_key
-                 break # Take the first simple match
-
-        if best_match:
+        if matches:
+            best_match = matches[0]
             value = user_memory[best_match]
             speak(f"You told me that {best_match} is {value}.")
             return
@@ -1423,7 +1418,7 @@ def process_command(command):
     if command.startswith("remember"):
         remember_fact(command)
         return True
-    if any(phrase in command for phrase in ["what is", "what's", "who is", "who's", "tell me"]):
+    if any(phrase in command for phrase in ["what is", "what's", "who is", "who's", "when is", "when's", "where is", "where's", "tell me"]):
         recall_fact(command)
         return True
 
