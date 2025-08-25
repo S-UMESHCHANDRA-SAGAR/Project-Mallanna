@@ -16,6 +16,7 @@ import random
 import datetime
 import threading
 import difflib
+import sqlite3
 from pathlib import Path
 
 # --- Feature-Specific Libraries ---
@@ -295,19 +296,10 @@ def speak(text, priority=False):
         print("💡 Try: pip install pywin32")
 
 def load_config():
-    """Enhanced configuration loader with AI settings and user memory."""
+    """Enhanced configuration loader with AI settings."""
     try:
         with open('config.json', 'r') as f:
-            config_data = json.load(f)
-
-        # --- FIX: Ensure user_memory key exists ---
-        if "user_memory" not in config_data:
-            config_data["user_memory"] = {}
-            with open('config.json', 'w') as f:
-                json.dump(config_data, f, indent=4)
-
-        return config_data
-
+            return json.load(f)
     except FileNotFoundError:
         speak("Configuration file not found. Creating a comprehensive config file for you.")
         template = {
@@ -1198,12 +1190,22 @@ def recall_fact(command):
                 key = key.replace(trigger, "").strip()
                 break
 
-        # Check user memory first
-        config_data = load_config()
-        user_memory = config_data.get("user_memory", {})
+        # Query the database for all keys
+        conn = sqlite3.connect('jarvis_memory.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM memory")
+        all_facts = cursor.fetchall()
+        conn.close()
+
+        if not all_facts:
+            speak(f"I don't have any facts stored in my memory yet. Let me search online for you.")
+            search_wikipedia(command)
+            return
+
+        user_memory = {k: v for k, v in all_facts}
+        stored_keys = list(user_memory.keys())
 
         # Find the best match in memory using difflib for fuzzy matching
-        stored_keys = list(user_memory.keys())
         matches = difflib.get_close_matches(key, stored_keys, n=1, cutoff=0.6)
 
         if matches:
@@ -1249,12 +1251,12 @@ def remember_fact(command):
             speak("I seem to be missing either the fact or the value to remember.")
             return
 
-        # Load, update, and save config
-        config_data = load_config()
-        config_data["user_memory"][key] = value
-
-        with open('config.json', 'w') as f:
-            json.dump(config_data, f, indent=4)
+        # Save fact to the database
+        conn = sqlite3.connect('jarvis_memory.db')
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO memory (key, value) VALUES (?, ?)", (key, value))
+        conn.commit()
+        conn.close()
 
         speak(f"Got it. I'll remember that {key} is {value}.")
 
@@ -1540,9 +1542,44 @@ def test_audio_output():
 # 7. MAIN EXECUTION LOOP WITH AI
 # -------------------
 
+def init_memory_db():
+    """Initializes the SQLite database for user memory."""
+    try:
+        conn = sqlite3.connect('jarvis_memory.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS memory (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        ''')
+        conn.commit()
+
+        # --- One-time migration from config.json to SQLite ---
+        config_data = load_config()
+        if "user_memory" in config_data and config_data["user_memory"]:
+            print("🔄 Migrating old memory format to database...")
+            for key, value in config_data["user_memory"].items():
+                cursor.execute("INSERT OR IGNORE INTO memory (key, value) VALUES (?, ?)", (key, value))
+            conn.commit()
+
+            # Clear the old memory from config.json
+            del config_data["user_memory"]
+            with open('config.json', 'w') as f:
+                json.dump(config_data, f, indent=4)
+            print("✅ Migration complete. Old memory format removed from config.")
+
+        conn.close()
+        print("✅ Memory database initialized successfully.")
+    except Exception as e:
+        print(f"❌ Error initializing memory database: {e}")
+
 def main():
     """Enhanced main loop with AI integration."""
     print("🚀 Starting Jarvis 3.0 with AI...")
+
+    print("🧠 Initializing memory...")
+    init_memory_db()
     
     # Test audio output first
     print("🔊 Testing audio output...")
