@@ -294,10 +294,19 @@ def speak(text, priority=False):
         print("💡 Try: pip install pywin32")
 
 def load_config():
-    """Enhanced configuration loader with AI settings."""
+    """Enhanced configuration loader with AI settings and user memory."""
     try:
         with open('config.json', 'r') as f:
-            return json.load(f)
+            config_data = json.load(f)
+
+        # --- FIX: Ensure user_memory key exists ---
+        if "user_memory" not in config_data:
+            config_data["user_memory"] = {}
+            with open('config.json', 'w') as f:
+                json.dump(config_data, f, indent=4)
+
+        return config_data
+
     except FileNotFoundError:
         speak("Configuration file not found. Creating a comprehensive config file for you.")
         template = {
@@ -329,7 +338,8 @@ def load_config():
                 "voice_volume": 0.9,
                 "ai_enabled": True,
                 "ai_fallback": True
-            }
+            },
+            "user_memory": {}
         }
         with open('config.json', 'w') as f:
             json.dump(template, f, indent=4)
@@ -1176,6 +1186,87 @@ def close_active_window():
         print(f"Error closing window: {e}")
         speak("I encountered an error while trying to close the window.")
 
+def recall_fact(command):
+    """Recalls a fact from user_memory. If not found, falls back to Wikipedia."""
+    try:
+        # e.g., "what is my pin" or "who is my wife"
+        key = command.lower()
+        triggers = ["what is", "what's", "who is", "who's", "tell me about", "tell me"]
+        for trigger in triggers:
+            if key.startswith(trigger):
+                key = key.replace(trigger, "").strip()
+                break
+
+        # Check user memory first
+        config_data = load_config()
+        user_memory = config_data.get("user_memory", {})
+
+        # Find the best match in memory (more flexible)
+        best_match = None
+        highest_ratio = 0.7  # Require a minimum match ratio
+
+        # A simple fuzzy matching
+        for stored_key in user_memory.keys():
+            # This is a very basic way to check for similarity
+            if key in stored_key or stored_key in key:
+                 best_match = stored_key
+                 break # Take the first simple match
+
+        if best_match:
+            value = user_memory[best_match]
+            speak(f"You told me that {best_match} is {value}.")
+            return
+
+        # If not found in local memory, proceed to other search functions
+        speak(f"I don't have '{key}' in my memory. Let me search online for you.")
+
+        # Fallback to existing search functions
+        search_wikipedia(command) # Pass the original command for better context
+
+    except Exception as e:
+        print(f"Error recalling fact: {e}")
+        speak("I had trouble recalling that fact.")
+
+def remember_fact(command):
+    """Saves a user-defined fact to the config file."""
+    try:
+        # e.g., "remember that my pin is 1234"
+        # Find the delimiter " is "
+        parts = command.lower().split(" is ")
+        if len(parts) < 2:
+            speak("I didn't understand the format. Please say 'remember that [the fact] is [the value]'.")
+            return
+
+        # The key is everything after "remember that" and before "is"
+        key_phrase = parts[0]
+        # Remove "remember that" and similar phrases
+        for trigger_phrase in ["remember that", "remember"]:
+             if key_phrase.startswith(trigger_phrase):
+                  key = key_phrase.replace(trigger_phrase, "").strip()
+                  break
+        else:
+             key = key_phrase.strip()
+
+        # The value is everything after the first " is "
+        value = " is ".join(parts[1:]).strip()
+
+        if not key or not value:
+            speak("I seem to be missing either the fact or the value to remember.")
+            return
+
+        # Load, update, and save config
+        config_data = load_config()
+        config_data["user_memory"][key] = value
+
+        with open('config.json', 'w') as f:
+            json.dump(config_data, f, indent=4)
+
+        speak(f"Got it. I'll remember that {key} is {value}.")
+
+    except Exception as e:
+        print(f"Error remembering fact: {e}")
+        speak("I had trouble remembering that. Please try again.")
+
 def minimize_all_windows():
     """Minimizes all windows to show the desktop."""
     if not PYAUTOGUI_AVAILABLE:
@@ -1209,7 +1300,7 @@ COMMANDS = {
     
     # AI-specific commands
     ("ask ai", "ai", "artificial intelligence"): lambda cmd: ai_general_query(cmd.replace("ask ai", "").replace("ai", "").strip()),
-    ("explain", "tell me about", "what is", "who is"): lambda cmd: ai_explain_topic(cmd),
+    ("explain", "tell me about"): lambda cmd: ai_explain_topic(cmd),
     ("help me with", "solve", "problem"): lambda cmd: ai_problem_solver(cmd),
     ("write", "create", "generate"): lambda cmd: ai_creative_task(cmd),
     ("code", "programming", "script"): lambda cmd: ai_code_helper(cmd),
@@ -1326,6 +1417,14 @@ def process_command(command):
         return True
     if any(phrase in command for phrase in ["minimize all", "show desktop"]):
         minimize_all_windows()
+        return True
+
+    # Memory commands
+    if command.startswith("remember"):
+        remember_fact(command)
+        return True
+    if any(phrase in command for phrase in ["what is", "what's", "who is", "who's", "tell me"]):
+        recall_fact(command)
         return True
 
     # Find exact matches first
