@@ -1333,6 +1333,45 @@ def minimize_all_windows():
         print(f"Error minimizing windows: {e}")
         speak("I encountered an error while trying to minimize windows.")
 
+def open_file_explorer(path_str="."):
+    """
+    Opens the system's file explorer to a specified path.
+    Handles different operating systems.
+    """
+    try:
+        # If no path is given, open the current directory.
+        # This also handles cases where the parsed command is empty.
+        if not path_str or path_str.strip() == ".":
+            path_str = os.getcwd()
+            speak("Opening the current directory.")
+        else:
+             speak(f"Opening {path_str}")
+
+        path = os.path.abspath(path_str)
+
+        if not os.path.exists(path):
+            # A special check for drive letters on Windows (e.g., "D drive")
+            if sys.platform == "win32" and len(path_str) == 1 and path_str.isalpha():
+                path = f"{path_str.upper()}:\\"
+                if not os.path.exists(path):
+                    speak(f"Sorry, I couldn't find the drive {path_str}.")
+                    return
+            else:
+                speak(f"Sorry, I couldn't find the path {path_str}. Please check if it's correct.")
+                return
+
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin": # macOS
+            subprocess.run(["open", path], check=True)
+        else: # Linux
+            subprocess.run(["xdg-open", path], check=True)
+
+    except Exception as e:
+        print(f"Error opening file explorer: {e}")
+        speak(f"Sorry, I encountered an error while trying to open {path_str}.")
+
+
 # -------------------
 # 5. AI-ENHANCED COMMAND MAPPING
 # -------------------
@@ -1386,6 +1425,9 @@ COMMANDS = {
     ("restart", "reboot"): lambda: system_power("restart"),
     ("uninstall", "remove program"): uninstall_application,
     
+    # File Explorer (must come before the generic "open" for apps)
+    ("open file explorer", "open folder", "open drive"): handle_file_explorer_command,
+
     # Apps
     ("open",): lambda cmd: handle_app_opening(cmd),
     
@@ -1406,6 +1448,28 @@ def handle_reminder(command):
             speak("Please say 'remind me in X minutes to do something'")
     except:
         speak("I didn't understand the reminder format")
+
+def handle_file_explorer_command(command):
+    """Parses file explorer commands to extract the path."""
+    path = command.lower()
+
+    # Define triggers and remove them to isolate the path
+    triggers = ["open file explorer", "open folder", "open drive", "open"]
+
+    # Sort triggers by length (desc) to match "open file explorer" before "open"
+    for trigger in sorted(triggers, key=len, reverse=True):
+        if path.startswith(trigger):
+            path = path.replace(trigger, "", 1).strip()
+            break
+
+    # Further clean up common spoken words like "drive"
+    path = path.replace("drive", "").strip()
+
+    # If the path is empty, it implies a generic "open file explorer" command
+    if not path:
+        path = "."
+
+    open_file_explorer(path)
 
 def handle_app_opening(command):
     """Handles app opening commands."""
