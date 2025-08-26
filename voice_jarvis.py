@@ -1278,9 +1278,10 @@ def press_hotkey(command):
         return
 
     key_map = {
-        "control": "ctrl", "alternate": "alt", "shift": "shift", "windows": "win",
-        "command": "cmd", "option": "option", "enter": "enter", "escape": "esc",
-        "delete": "delete", "backspace": "backspace", "up": "up", "down": "down",
+        "control": "ctrl", "ctrl": "ctrl", "alternate": "alt", "alt": "alt",
+        "shift": "shift", "windows": "win", "win": "win",
+        "command": "cmd", "cmd": "cmd", "option": "option", "enter": "enter", "escape": "esc",
+        "delete": "delete", "del": "delete", "backspace": "backspace", "up": "up", "down": "down",
         "left": "left", "right": "right", "tab": "tab", "space": "space",
         # Common letters to avoid speech recognition errors
         "see": "c", "a": "a", "bee": "b", "dee": "d", "e": "e", "eff": "f",
@@ -1380,6 +1381,7 @@ COMMANDS = {
     ("weather in", "weather"): get_weather,
     ("volume", "set volume", "increase volume", "decrease volume"): adjust_volume,
     ("mute", "unmute"): toggle_mute,
+    ("press",): press_hotkey,
     ("shutdown", "shut down"): lambda: system_power("shutdown"),
     ("restart", "reboot"): lambda: system_power("restart"),
     ("uninstall", "remove program"): uninstall_application,
@@ -1463,9 +1465,6 @@ def process_command(command):
         minimize_all_windows()
         return True
 
-    if "press" in command:
-        press_hotkey(command)
-        return True
 
     if any(phrase in command for phrase in ["start dictation", "start typing"]):
         start_dictation()
@@ -1700,13 +1699,13 @@ def main():
                     if actual_command:
                         speak("On it!")
                         if process_command(actual_command):
-                        completion_responses = [
-                            "Task completed! Anything else I can help you with?",
-                            "Done! What else can I do for you?",
-                            "All set! Need anything else?",
-                            "Perfect! What's next?"
-                        ]
-                        speak(random.choice(completion_responses))
+                            completion_responses = [
+                                "Task completed! Anything else I can help you with?",
+                                "Done! What else can I do for you?",
+                                "All set! Need anything else?",
+                                "Perfect! What's next?"
+                            ]
+                            speak(random.choice(completion_responses))
                     else:
                         speak("I couldn't complete that task. Try asking me for help to see what I can do.")
                 else:
