@@ -94,6 +94,7 @@ recognizer = sr.Recognizer()
 
 # Global TTS engine for better performance
 tts_engine = None
+is_dictation_mode = False
 
 # AI Configuration
 GEMINI_API_KEY = "AIzaSyCfQBCOfZbwnce3Dn82QBz7RoMRCi6Ain8" # IMPORTANT: Replace with your actual API key
@@ -1264,6 +1265,52 @@ def remember_fact(command):
         print(f"Error remembering fact: {e}")
         speak("I had trouble remembering that. Please try again.")
 
+def start_dictation():
+    """Activates dictation mode."""
+    global is_dictation_mode
+    is_dictation_mode = True
+    speak("Dictation mode activated. I will type what you say. Say 'stop typing' to exit.")
+
+def press_hotkey(command):
+    """Presses a combination of keys specified in the command."""
+    if not PYAUTOGUI_AVAILABLE:
+        speak("Keyboard automation is not available. Please install pyautogui.")
+        return
+
+    key_map = {
+        "control": "ctrl", "alternate": "alt", "shift": "shift", "windows": "win",
+        "command": "cmd", "option": "option", "enter": "enter", "escape": "esc",
+        "delete": "delete", "backspace": "backspace", "up": "up", "down": "down",
+        "left": "left", "right": "right", "tab": "tab", "space": "space",
+        # Common letters to avoid speech recognition errors
+        "see": "c", "a": "a", "bee": "b", "dee": "d", "e": "e", "eff": "f",
+        "gee": "g", "aitch": "h", "i": "i", "jay": "j", "kay": "k", "el": "l",
+        "em": "m", "en": "n", "oh": "o", "pea": "p", "cue": "q", "are": "r",
+        "ess": "s", "tea": "t", "you": "u", "vee": "v", "double you": "w",
+        "ex": "x", "why": "y", "zed": "z",
+    }
+
+    try:
+        # e.g., "press control c"
+        command = command.lower()
+        for trigger in ["press keys", "press key", "press"]:
+            if command.startswith(trigger):
+                command = command.replace(trigger, "").strip()
+                break
+
+        keys_to_press = [key_map.get(word, word) for word in command.split()]
+
+        if not keys_to_press:
+            speak("Please specify which keys to press.")
+            return
+
+        pyautogui.hotkey(*keys_to_press)
+        speak(f"Pressed {' plus '.join(keys_to_press)}.")
+
+    except Exception as e:
+        print(f"Error pressing hotkey: {e}")
+        speak("I had a problem pressing those keys.")
+
 def minimize_all_windows():
     """Minimizes all windows to show the desktop."""
     if not PYAUTOGUI_AVAILABLE:
@@ -1414,6 +1461,14 @@ def process_command(command):
         return True
     if any(phrase in command for phrase in ["minimize all", "show desktop"]):
         minimize_all_windows()
+        return True
+
+    if "press" in command:
+        press_hotkey(command)
+        return True
+
+    if any(phrase in command for phrase in ["start dictation", "start typing"]):
+        start_dictation()
         return True
 
     # Memory commands
@@ -1613,29 +1668,38 @@ def main():
     
     while True:
         try:
-            command_text = listen()
-            
-            if not command_text:
-                consecutive_empty_commands += 1
-                if consecutive_empty_commands >= 3:
-                    if ai_model:
-                        prompt_response = ask_ai("Generate a friendly reminder that you're still available to help, keep it short and varied", "system prompt")
-                        speak(prompt_response)
-                    else:
-                        speak("I'm still here if you need me. Just say my name!")
-                    consecutive_empty_commands = 0
-                continue
-            
-            consecutive_empty_commands = 0
-            
-            if WAKE_WORD in command_text:
-                # Find the wake word and extract the command
-                wake_index = command_text.find(WAKE_WORD)
-                actual_command = command_text[wake_index + len(WAKE_WORD):].strip()
+            if is_dictation_mode:
+                text_to_type = listen()
+                if text_to_type and "stop typing" in text_to_type.lower():
+                    # Use a global variable to deactivate the mode
+                    globals()['is_dictation_mode'] = False
+                    speak("Dictation mode deactivated.")
+                elif text_to_type:
+                    pyautogui.write(text_to_type + " ")
+            else:
+                command_text = listen()
                 
-                if actual_command:
-                    speak("On it!")
-                    if process_command(actual_command):
+                if not command_text:
+                    consecutive_empty_commands += 1
+                    if consecutive_empty_commands >= 3:
+                        if ai_model:
+                            prompt_response = ask_ai("Generate a friendly reminder that you're still available to help, keep it short and varied", "system prompt")
+                            speak(prompt_response)
+                        else:
+                            speak("I'm still here if you need me. Just say my name!")
+                        consecutive_empty_commands = 0
+                    continue
+
+                consecutive_empty_commands = 0
+
+                if WAKE_WORD in command_text:
+                    # Find the wake word and extract the command
+                    wake_index = command_text.find(WAKE_WORD)
+                    actual_command = command_text[wake_index + len(WAKE_WORD):].strip()
+
+                    if actual_command:
+                        speak("On it!")
+                        if process_command(actual_command):
                         completion_responses = [
                             "Task completed! Anything else I can help you with?",
                             "Done! What else can I do for you?",
