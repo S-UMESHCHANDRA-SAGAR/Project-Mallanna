@@ -1694,6 +1694,7 @@ def init_memory_db():
 
 def main():
     """Enhanced main loop with AI integration."""
+    global is_dictation_mode
     print("🚀 Starting Jarvis 3.0 with AI...")
 
     print("🧠 Initializing memory...")
@@ -1734,8 +1735,8 @@ def main():
             if is_dictation_mode:
                 text_to_type = listen()
                 if text_to_type and "stop typing" in text_to_type.lower():
-                    # Use a global variable to deactivate the mode
-                    globals()['is_dictation_mode'] = False
+                    # Deactivate dictation mode
+                    is_dictation_mode = False
                     speak("Dictation mode deactivated.")
                 elif text_to_type:
                     pyautogui.write(text_to_type + " ")
