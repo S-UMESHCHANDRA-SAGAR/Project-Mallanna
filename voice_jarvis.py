@@ -1426,7 +1426,7 @@ COMMANDS = {
     ("uninstall", "remove program"): uninstall_application,
     
     # File Explorer (must come before the generic "open" for apps)
-    ("open file explorer", "open folder", "open drive"): handle_file_explorer_command,
+    ("open file explorer", "open folder", "open drive"): lambda cmd: handle_file_explorer_command(cmd),
 
     # Apps
     ("open",): lambda cmd: handle_app_opening(cmd),
